@@ -137,17 +137,41 @@ let KeefoxUtil = {
     },
 
     getLogins:function(host,completer){
+	    function filter(all,host,ac){
+			var i=0;
+			for each(var item in all) {
+				if(item==null || item.url==null || item.url.indexOf(host)<0) continue;
+				i++;
+				if(completer) ac.push([item.uuid,i+"--"+item.usernameValue+"@"+item.url]);
+				else ac.push(item);
+			}
+		}
+		
 	    var ac=[];
 
 	    if(host==null) return ac;
 
-	    var i=0;
-	    for each(var item in KeefoxUtil.getAllLogins()) {
-		    if(item==null || item.url==null || item.url.indexOf(host)<0) continue;
-		    i++;
-		    if(completer) ac.push([item.uuid,i+"--"+item.usernameValue+"@"+item.url]);
-		    else ac.push(item);
-	    }
+	    var all=KeefoxUtil.getAllLogins();
+		
+		filter(all,host,ac);
+		
+		if(ac.length>0) return ac;
+		
+		var strs=host.split(".");
+		if(strs.length>3){
+			var j=strs.length;
+			var sub=strs[j-3]+"."+strs[j-2]+"."+strs[j-1];
+			filter(all,sub,ac);		
+			if(ac.length>0) return ac;
+		}
+		
+		if(strs.length>2){
+			var j=strs.length;
+			var sub=strs[j-2]+"."+strs[j-1];
+			filter(all,sub,ac);		
+			if(ac.length>0) return ac;
+		}
+		
 	    return ac;
     },
 
