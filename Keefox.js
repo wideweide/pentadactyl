@@ -218,7 +218,7 @@ let KeefoxUtil = {
 			Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService).showAlertNotification(
 				null,"Keefox: Enter master password to launch KeePass", "Note: wait for a while to login", true
 			); 
-			CommandExMode().open(":private launchKeePass ");
+			CommandExMode().open("private launchKeePass ");
 			return;
 		}
 
@@ -236,7 +236,7 @@ let KeefoxUtil = {
 			return;
 		}
 
-		CommandExMode().open(":login ");
+		CommandExMode().open("login ");
 	}
 
 }//end of KeefoxUtil
