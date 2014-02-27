@@ -1,68 +1,89 @@
 /*********************************************************************************
  * pentadactyl plugin for extension AlertBox
  *          https://addons.mozilla.org/en-US/firefox/addon/alertbox/
- * 实现命令openunread，可列表显示当前未读链接
- * 拦截dactyl.open，自动标记链接为已读
- * 将未读列表集成到open/tabopen中，无输入时默认打开下一条未读链接:o<Enter>
+ * :openunread，command to list unread list
+ * Intercept dactyl.open，auto mark unread to read
+ * add completer to open/tabopen，if no input,will open first unread link:o<Enter>
  * ******************************************************************************/
+var Service = Components.classes['@ajitk.com/alertbox/alertbox;1'].getService().wrappedJSObject;
 
-var service = Cc['@ajitk.com/alertbox/alertbox;1'].getService().wrappedJSObject;
+//global UnRead list
+let UnReadList=[];
+
+//get unread list,will be called in 
+// init
+// when unread items changes
+function FindUnReadList(){
+	Service.store.SieveStore.find({
+	  state: 40,  /* C.STATE_READY, */
+	  'ts_view.lt': { name: 'ts_data', type: 'field' }
+	}, {
+	  only: ['id','uri','name', 'text', 'ts_data'],
+	}, function(err, result) {
+		UnReadList=result.data;		
+	});
+}
+
+// Run At init
+FindUnReadList();
+
+// Number of unread items changes. Update global list.
+Service.service.state.on('change:unread', function() {
+	FindUnReadList();
+});
+
 let AlertBoxUtil={
-	//读取未读列表
-	getUnread : function(){
+	//get and return unread list
+	getUnread : function(){	
 		var il=[];
-		service.Updaters.forEach(function(locator, updater, site) {
-			if(updater.isUnread(locator)) il.push([
-				site.url,
-				(updater.getText(locator,0)+"").substr(0,60)+" - "+locator.name
-			]);
-		});    
-		if(il.length==0) il.push(["about:blank","Congratulations,you have already read all."]);
+    		for each(item in UnReadList)
+			il.push([item.uri,item.text.substr(0,60) + " - " + item.name]);		
 		return il;
 	},
 
-	//将指定url的链接标记为已读
+	//mark url's item to readed
 	markRead : function(url){
-		var str=url+"";
-		if(str=="") return;
-		service.Updaters.forEach(function(locator, updater, site) {
-			if(site.url.toLowerCase()==str.toLowerCase()){
-				if(updater.isUnread(locator)) updater.markRead(locator);
-				return;
+		Service.notify.Popup.hide();
+		var id="";
+		for each(item in UnReadList){
+			if(item.uri==url){
+				id=item.id;
+				break;
 			}
-		}); 
+		}
+		if(id && id.length>0){
+			Service.store.SieveStore.update(
+				id, 
+				{ ts_view: Date.now() }
+				//function(){FindUnReadList();}
+			);
+		}
 	},
 
-	//获取下一条未读的链接
+	//get next unread url
 	getNextUrl : function(){
-		var str="";
-		var bRun=true;
-		//改不成for循环？
-		service.Updaters.forEach(function(locator, updater, site) {
-			if(bRun && updater.isUnread(locator)){
-				str = site.url;
-				brun=false;
-			}
-		}); 
-		return str;
+		return UnReadList && UnReadList.length > 0 
+			? UnReadList[0].uri 
+			: "";
 	},
 
-	//打开下一条未读链接
+	//open given url,mark it as readed
 	openUrl : function(url){		
 		if(url=="") {
-			dactyl.echo("AlertBox: No update found");
 			Cc["@mozilla.org/alerts-service;1"].getService(Ci.nsIAlertsService).showAlertNotification(
 				"chrome://alertbox/skin/icons/bell_32.png",
-				"AlertBox: no update found", "远离电脑，珍爱生命...", true
+				"AlertBox: no update found", "Away from the computer, cherish life...", true
 			); 
 			return;
 		}
+	
 		AlertBoxUtil.markRead(url);
+
 		if(dactyl.open_org!=null) dactyl.open_org(url);
 	        else dactyl.open(url);
 	},
 
-	//未读链接的自动完成器
+	//completer for open/tabopen
 	completer: function (context) {
 		context.title=["AlertBox Unread List","New Content"];
 		context.completions=AlertBoxUtil.getUnread();
@@ -74,12 +95,12 @@ let AlertBoxUtil={
 }
 
 
-//打开未读链接，未指定时自动读取一条未读记录
+//add command:open unread item,use first item if no input
 group.commands.add(
 	['openunread', 'ou[nread]'],
 	'open unread site in alertbox',
 	function(args){
-		var url=(args.length>0) ? args[0] : url=AlertBoxUtil.getNextUrl();
+		var url=(args && args.length>0) ? args[0] : url=AlertBoxUtil.getNextUrl();
 		AlertBoxUtil.openUrl(url);
 	},
 	{
@@ -91,21 +112,8 @@ group.commands.add(
 );
 
 
-//拦截调用，开启此项可将通过dactyl打开的链接自动标记为已读
-//检查是否为null避免重复注册
-if(true && dactyl.open_org==null){
-	dactyl.open_org = dactyl.open;
-	dactyl.open = function open(urls, params = {}, force = false) {
-		if(urls=="about:blank"){
-			var next=AlertBoxUtil.getNextUrl();
-			if(next!="") urls=next;
-		}
-		AlertBoxUtil.markRead(dactyl.parseURLs(urls)[0]);
-		dactyl.open_org(urls,params,force);
-	}
-}
 
-//拦截调用，开启此项可将未读链接显示在open/tabopen列表选项的首位,否则只能通过命令openunread来处理
+//add unread list to open/tabopen's completer
 if(true){
 	completion.addUrlCompleter("AlertBox","Unread List",AlertBoxUtil.completer);
 	var array=[];
@@ -114,5 +122,20 @@ if(true){
 		if(item!="AlertBox") array.push(item);
 	})
 	options["complete"]=array;
+}
+
+//Intecept dactyl.open to mark unread to read
+//check null to avoid repeat intecept
+if(true && dactyl.open_org==null){
+	dactyl.open_org = dactyl.open;
+	dactyl.open = function open(urls, params = {}, force = false) {
+		if(urls=="about:blank"){
+			var next=AlertBoxUtil.getNextUrl();
+			if(next && next.length>0) urls=next;
+		}
+
+		AlertBoxUtil.markRead(dactyl.parseURLs(urls)[0]);
+		dactyl.open_org(urls,params,force);
+	}
 }
 
