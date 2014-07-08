@@ -36,7 +36,7 @@ let AlertBoxUtil={
 	//get and return unread list
 	getUnread : function(){	
 		var il=[];
-    		for each(item in UnReadList)
+    	for each(item in UnReadList)
 			il.push([item.uri,item.text.substr(0,60) + " - " + item.name]);		
 		return il;
 	},
@@ -112,6 +112,15 @@ group.commands.add(
 );
 
 
+group.commands.add(
+	['findunread'],
+	'Find unread site in alertbox',
+	function(){
+		FindUnReadList();
+	}
+);
+
+
 
 //add unread list to open/tabopen's completer
 if(true){
@@ -136,6 +145,7 @@ if(true && dactyl.open_org==null){
 
 		AlertBoxUtil.markRead(dactyl.parseURLs(urls)[0]);
 		dactyl.open_org(urls,params,force);
+		setTimeout(FindUnReadList,2000);
 	}
 }
 
